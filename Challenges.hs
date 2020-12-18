@@ -103,7 +103,6 @@ exGrid1'1 :: [[Char]]
 exGrid1'1 = ["HAGNIRTSH" , "SACAGETAK", "GCSTACKEL","MGHKMILKI","EKNLETGCN","TNIRTLETE","IRAAHCLSR","MAMROSAGD","GIZKDDNRG"]
 exWords1'1 :: [[Char]]
 exWords1'1 = ["HASKELL","STRING","STACK","MAIN","METHOD"]
-
 exGrid1'2 :: [[Char]]
 exGrid1'2 = ["ROBREUMBR","AURPEPSAN","UNLALMSEE","YGAUNPYYP","NLMNBGENA","NBLEALEOR","ALRYPBBLG","NREPBEBEP","YGAYAROMR"]
 exWords1'2 :: [[Char]]
@@ -122,6 +121,7 @@ exWords1'3 = ["ABC", "XYZ"]
 
 -- Produces a solvable word search grid.
 createWordSearch :: [ String ] -> Double -> IO WordSearchGrid
+createWordSearch [] _ = error "No words were given."
 createWordSearch words density = do let gridSize = findSize density words
                                     splitGrid gridSize words
 
@@ -255,8 +255,6 @@ testPositionWord = do positionWord 5 "Hello"
 testFindPositions :: IO [(Int, Int)]
 testFindPositions = do findPositions 5
 
-
-
 -- Given testing functions.
 createAndSolve :: [ String ] -> Double -> IO [ (String, Maybe Placement) ]
 createAndSolve words maxDensity =   do g <- createWordSearch words maxDensity
@@ -275,15 +273,101 @@ printGrid (w:ws) = do putStrLn w
 
 -- Challenge 3 --
 
+-- Reminder of the data types used in parts 2 and 3
+-- data LamMacroExpr = LamDef [(String, LamExpr)] LamExpr deriving (Eq, Show, Read)
+-- data LamExpr = LamMacro String | LamApp LamExpr LamExpr  |
+--                LamAbs Int LamExpr  | LamVar Int deriving (Eq, Show, Read)
+
 prettyPrint :: LamMacroExpr -> String
-prettyPrint _ = ""
+prettyPrint macroExpr | not (null lamDefs) = readDefExprs lamDefs ++ lamExpr
+                      | otherwise = lamExpr
+  where
+    lamDefs = getDefs macroExpr
+    lamExpr = readExpr (getExpr macroExpr) lamDefs
+    
+-- Gets the lambda definitions from a macro expression.
+getDefs :: LamMacroExpr -> [(String, LamExpr)]
+getDefs (LamDef defs _) = defs
 
--- examples in the instructions
+-- Gets the lambda expression from a lambda definition.
+getDefValue :: (String, LamExpr) -> String
+getDefValue (value, _) = value
+
+-- Gets the lambda expression from a lambda definition.
+getDefExpr :: (String, LamExpr) -> LamExpr
+getDefExpr (_, expr) = expr
+
+-- Gets the lambda expression from a macro expression.
+getExpr :: LamMacroExpr -> LamExpr
+getExpr (LamDef _ expr) = expr
+
+-- Gets the value for a given lambda expression.
+getValue :: LamExpr -> [(String, LamExpr)] -> String
+getValue lamExpr lamDefs = head $ map fst $ filter (\x -> snd x == lamExpr) lamDefs  
+
+-- Checks if a lambda expression is found in the list of those given in the definition.
+checkDefs :: LamExpr -> [(String, LamExpr)] -> Bool
+checkDefs lamExpr lamDefs = lamExpr `notElem` map snd lamDefs
+
+-- Prints the lambda expressions in the definition.
+readDefExprs :: [(String, LamExpr)] -> String
+readDefExprs (x:xs) | not (null xs) = exprString ++ " and " ++ readDefExprs xs
+                    | otherwise = exprString ++ " in "
+  where
+    exprString = "def " ++ getDefValue x ++ " = " ++ readExpr (getDefExpr x) []
+
+-- Prints a lambda expression.
+readExpr :: LamExpr -> [(String, LamExpr)] -> String
+
+-- Prints macro and variable expressions.
+readExpr (LamMacro lamValue) _ = lamValue
+readExpr (LamVar lamNum) _ = "x" ++ show lamNum
+
+-- Prints application expressions that don't require brackets - LamMacro version.
+readExpr (LamApp (LamMacro lamValue) lamExpr) [] = readExpr (LamMacro lamValue) [] ++ " " ++ readExpr lamExpr []
+readExpr (LamApp (LamMacro lamValue) lamExpr) lamDefs | checkDefs lamExpr lamDefs = readExpr (LamMacro lamValue) lamDefs ++ " " ++ readExpr lamExpr lamDefs
+                                                      | otherwise = readExpr (LamMacro lamValue) lamDefs ++ " " ++ getValue lamExpr lamDefs
+
+-- Prints application expressions that don't require brackets - LamVar version.
+readExpr (LamApp (LamVar lamNum) lamExpr) [] = readExpr (LamVar lamNum) [] ++ " " ++ readExpr lamExpr []
+readExpr (LamApp (LamVar lamNum) lamExpr) lamDefs | checkDefs lamExpr lamDefs = readExpr (LamVar lamNum) lamDefs ++ " " ++ readExpr lamExpr lamDefs
+                                                  | otherwise = readExpr (LamVar lamNum) lamDefs ++ " " ++ getValue lamExpr lamDefs
+
+-- Prints application expressions that require brackets.
+readExpr (LamApp lamExpr1 lamExpr2) [] = "(" ++ readExpr lamExpr1 [] ++ ") " ++ readExpr lamExpr2 []
+readExpr (LamApp lamExpr1 lamExpr2) lamDefs | checkDefs lamExpr1 lamDefs && checkDefs lamExpr2 lamDefs = "(" ++ readExpr lamExpr1 lamDefs ++ ") " ++ readExpr lamExpr2 lamDefs
+                                            | not (checkDefs lamExpr1 lamDefs) && checkDefs lamExpr2 lamDefs = getValue lamExpr1 lamDefs ++ " " ++ readExpr lamExpr2 lamDefs
+                                            | checkDefs lamExpr1 lamDefs && not (checkDefs lamExpr2 lamDefs) = "(" ++ readExpr lamExpr1 lamDefs ++ ") " ++ getValue lamExpr2 lamDefs
+                                            | not (checkDefs lamExpr1 lamDefs) && not (checkDefs lamExpr2 lamDefs) = getValue lamExpr1 lamDefs ++ " " ++ getValue lamExpr2 lamDefs
+
+-- Prints abstraction expressions.
+readExpr (LamAbs lamNum lamExpr) [] = "\\x" ++ show lamNum ++ " -> " ++ readExpr lamExpr []
+readExpr (LamAbs lamNum lamExpr) lamDefs | checkDefs lamExpr lamDefs = "\\x" ++ show lamNum ++ " -> " ++ readExpr lamExpr lamDefs
+                                         | checkDefs lamExpr lamDefs = "\\x" ++ show lamNum ++ " -> " ++ getValue lamExpr lamDefs
+-- Currently printing double backslashes in abstraction expressions - read up on escaping this.
+
+
+-- My testing functions.
+testGetValue :: String
+testGetValue = getValue (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
+
+testCheckDefs :: Bool
+testCheckDefs = checkDefs (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
+
+-- Testing expressions.
+ex3'1 :: LamMacroExpr
 ex3'1 = LamDef [] (LamApp (LamAbs 1 (LamVar 1)) (LamAbs 1 (LamVar 1)))
+ex3'2 :: LamMacroExpr
 ex3'2 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamAbs 1 (LamVar 1))))
+ex3'3 :: LamMacroExpr
 ex3'3 = LamDef [ ("F", LamAbs 1 (LamVar 1) ) ] (LamAbs 2 (LamApp (LamVar 2) (LamMacro "F")))
-ex3'4 = LamDef [ ("F", LamAbs 1 (LamVar 1) ) ] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2))) 
+ex3'4 :: LamMacroExpr
+ex3'4 = LamDef [ ("F", LamAbs 1 (LamVar 1) ) ] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
+ex3'5 :: LamMacroExpr
+ex3'5 = LamDef [ ("A", LamAbs 1 (LamVar 1)), ("B", LamVar 2 ) ] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
+ex3'6 :: LamMacroExpr
+ex3'6 = LamDef [] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
 
 -- Challenge 4 --
