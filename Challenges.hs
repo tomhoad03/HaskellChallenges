@@ -379,17 +379,27 @@ ex3'6 = LamDef [] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
 -- Produces a lamda macro expression for a valid macro.
 parseLamMacro :: String -> Maybe LamMacroExpr
-parseLamMacro macro | not (null macro) = Just (LamDef [] (LamVar 1))
+parseLamMacro macro | not (null macro) = Just (breakMacro macro)
                     | otherwise = Nothing
 
 -- Breaks apart the macro into its definition and its expression.
-breakMacro macro | not (null i) = take x macro ++ drop y (take (length macro) macro)
-                 | otherwise = macro
+breakMacro :: String -> LamMacroExpr
+breakMacro macro | not (null i) = convertDef def expr
+                 | otherwise = LamDef [] (convertExpr macro)
   where
     i = elemIndices 'i' macro
     x = head i - 1
     y = x + 4
+    def = take x macro
+    expr = drop y (take (length macro) macro)
 
+-- Converts a string into a lambda expression with a definition.
+convertDef :: String -> String -> LamMacroExpr
+convertDef macroDef macroExpr = LamDef [ (drop 4 $ take 5 macroDef, convertExpr (drop 5 macroDef)) ] (convertExpr macroExpr)
+
+-- Converts a string into a lambda expression.
+convertExpr :: String -> LamExpr
+convertExpr macroExpr = LamVar 1
 
 
 
@@ -400,6 +410,7 @@ cpsTransform _ = LamDef [] (LamVar 0)
 
 -- Examples in the instructions
 exId =  (LamAbs 1 (LamVar 1))
+ex5'1 :: LamExpr
 ex5'1 = (LamApp (LamVar 1) (LamVar 2))
 ex5'2 = (LamDef [ ("F", exId) ] (LamVar 2) )
 ex5'3 = (LamDef [ ("F", exId) ] (LamMacro "F") )
