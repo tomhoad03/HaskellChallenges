@@ -391,39 +391,53 @@ breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (co
 
 -- Determines what type of expression is given.
 convertExpr :: String -> LamExpr
-convertExpr macro | isUpper x = LamMacro cleanMacro
-                  | length cleanMacro == 2 = LamVar (digitToInt y)
-                  | x == 'x' = LamApp (LamVar (digitToInt y)) (convertExpr (drop 3 cleanMacro))               
-                  | otherwise = LamAbs (digitToInt z) (convertExpr (drop 7 cleanMacro))
+convertExpr macro = readMacro $ bracketMacro macro
+
+-- Reads the string macro (now that it has been bracketed.)
+readMacro :: String -> LamExpr
+readMacro macro | head macro /= '(' && last macro /= ')' && length macro == 1 = LamMacro macro
+                | head macro /= '(' && last macro /= ')' = LamVar (digitToInt (last macro))
+                | head macro == '(' && last macro /= ')' = LamApp (readMacro $ removeBrackets $ init $ init macro) (LamVar (digitToInt (last macro)))
+                | head macro /= '(' && last macro == ')' = LamAbs (digitToInt (macro !! 2)) (readMacro $ removeBrackets $ drop 5 macro)
+                | head macro == '(' && last macro == ')' && length macro > mid = LamApp (readMacro (take mid macro)) (readMacro (drop mid macro))
+                | otherwise = readMacro $ removeBrackets macro
   where
-    cleanMacro = removeBrackets macro
-    x = head cleanMacro
-    y = cleanMacro !! 1
-    z = cleanMacro !! 2
+    mid = findMid macro
 
 -- Removes the brackets from an expression.
 removeBrackets :: [Char] -> [Char]
 removeBrackets macro | head macro == '(' && last macro == ')' = tail $ init macro
                      | otherwise = macro
 
--- These parts are experimental to read left associative rules. 
-
 -- Splits up a macro into its function parts.
-splitMacro :: String -> String
-splitMacro macro | null absSplit = "(" ++ associateMacro macro ++ ")"
-                 | null expressions = "(" ++ take 7 abstraction ++ splitMacro (drop 7 abstraction) ++ ")"
-                 | otherwise = "(" ++ associateMacro expressions ++ ")" ++ "(" ++ take 7 abstraction ++ splitMacro (drop 7 abstraction) ++ ")"
+bracketMacro :: String -> String
+bracketMacro macro | null absSplit = associateMacro macro
+                   | null exprs = abstrsSplit
+                   | otherwise = "(" ++ associateMacro exprs ++ ")" ++ abstrsSplit
   where
     absSplit = elemIndices '\\' macro
-    expressions = take (head absSplit) macro
-    abstraction = drop (head absSplit) macro
+    exprs = take (head absSplit) macro
+    abstrs = drop (head absSplit) macro
+    abstrsSplit = "(\\x" ++ [abstrs !! 2] ++ "->" ++ "(" ++ bracketMacro (drop 7 abstrs) ++ "))"
 
--- Breaks up the function parts by left associativity.
-associateMacro :: [Char] -> [Char]
+-- Splits up the function parts by left associativity.
+associateMacro :: String -> String
 associateMacro macro = leftBrackets ++ midBrackets
   where
     leftBrackets = intercalate "" [ "(" | a <- [2..(length $ words macro)]]
     midBrackets = intercalate ")" (words macro)
+
+-- Finds the middle part of the macro.
+findMid :: Num a => String -> a
+findMid macro = go (tail macro) 1 0
+  where
+    go m n c
+      | n == 0 = c + 1
+      | head m == '(' = go (tail m) (n+1) (c+1)
+      | head m == ')' = go (tail m) (n-1) (c+1)
+      | otherwise = go (tail m) n (c+1)
+      
+
 
 -- Challenge 5
 
