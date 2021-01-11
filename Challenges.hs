@@ -20,6 +20,7 @@ import Control.DeepSeq
 import System.IO
 import System.Random
 
+-- My import statements.
 import Data.Function ( on )
 
 instance NFData Orientation
@@ -40,6 +41,8 @@ data LamExpr = LamMacro String | LamApp LamExpr LamExpr  |
 -- END OF CODE YOU MUST NOT MODIFY
 
 -- ADD YOUR OWN CODE HERE
+
+
 
 -- Challenge 1 --
 
@@ -95,7 +98,7 @@ getLetter grid (x, y) | x > length grid - 1 || y > length grid - 1 = ' '
                       | x < 0 || y < 0 = ' '
                       | otherwise = (grid !! y) !! x
 
--- Testing grids and words.
+-- Challenge 1 and 2 testing grids and words.
 exGrid1'1 :: [[Char]]
 exGrid1'1 = ["HAGNIRTSH" , "SACAGETAK", "GCSTACKEL","MGHKMILKI","EKNLETGCN","TNIRTLETE","IRAAHCLSR","MAMROSAGD","GIZKDDNRG"]
 exWords1'1 :: [[Char]]
@@ -109,10 +112,6 @@ exGrid1'3 :: [[Char]]
 exGrid1'3 = ["YBCCY", "YXCAZ", "ABZYX", "XZYBC", "XYCAB"]
 exWords1'3 :: [[Char]]
 exWords1'3 = ["ABC", "XYZ"]
-
-
-
-
 
 
 
@@ -236,7 +235,7 @@ randomOrientation = do a <- randomNumber 8
 
 
 
---- My testing functions.
+--- My challenge 2 testing functions.
 testCreateWordSearch :: IO WordSearchGrid
 testCreateWordSearch = do createWordSearch ["ABC", "XYZ"] 0.5
 
@@ -266,9 +265,6 @@ printGrid :: WordSearchGrid -> IO ()
 printGrid [] = return ()
 printGrid (w:ws) = do putStrLn w
                       printGrid ws
-
-
-
 
 
 
@@ -348,14 +344,15 @@ readExpr (LamAbs lamNum lamExpr) lamDefs | checkDefs lamExpr lamDefs = "\\x" ++ 
 -- Currently printing double backslashes in abstraction expressions - read up on escaping this.
 
 
--- Testing functions.
+
+-- Challenge 3 testing functions.
 testGetValue :: String
 testGetValue = getValue (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
 
 testCheckDefs :: Bool
 testCheckDefs = checkDefs (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
 
--- Testing expressions.
+-- Challenge 3 testing expressions.
 ex3'1 :: LamMacroExpr
 ex3'1 = LamDef [] (LamApp (LamAbs 1 (LamVar 1)) (LamAbs 1 (LamVar 1)))
 ex3'2 :: LamMacroExpr
@@ -372,9 +369,6 @@ ex3'6 = LamDef [] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
 
 
-
-
-
 -- Challenge 4 --
 
 -- Produces a lamda macro expression for a valid macro.
@@ -384,24 +378,52 @@ parseLamMacro macro | not (null macro) = Just (breakMacro macro)
 
 -- Breaks apart the macro into its definition and its expression.
 breakMacro :: String -> LamMacroExpr
-breakMacro macro | not (null i) = convertDef def expr
+breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (convertExpr expr)
                  | otherwise = LamDef [] (convertExpr macro)
   where
     i = elemIndices 'i' macro
     x = head i - 1
-    y = x + 4
+    y = x + 4 
     def = take x macro
-    expr = drop y (take (length macro) macro)
+    defMacro = def !! 4
+    defExpr = drop 8 def 
+    expr = drop y macro
 
--- Converts a string into a lambda expression with a definition.
-convertDef :: String -> String -> LamMacroExpr
-convertDef macroDef macroExpr = LamDef [ (drop 4 $ take 5 macroDef, convertExpr (drop 5 macroDef)) ] (convertExpr macroExpr)
-
--- Converts a string into a lambda expression.
+-- Determines what type of expression is given.
 convertExpr :: String -> LamExpr
-convertExpr macroExpr = LamVar 1
+convertExpr macro | isUpper x = LamMacro cleanMacro
+                  | length cleanMacro == 2 = LamVar (digitToInt y)
+                  | x == 'x' = LamApp (LamVar (digitToInt y)) (convertExpr (drop 3 cleanMacro))               
+                  | otherwise = LamAbs (digitToInt z) (convertExpr (drop 7 cleanMacro))
+  where
+    cleanMacro = removeBrackets macro
+    x = head cleanMacro
+    y = cleanMacro !! 1
+    z = cleanMacro !! 2
 
+-- Removes the brackets from an expression.
+removeBrackets :: [Char] -> [Char]
+removeBrackets macro | head macro == '(' && last macro == ')' = tail $ init macro
+                     | otherwise = macro
 
+-- These parts are experimental to read left associative rules. 
+
+-- Splits up a macro into its function parts.
+splitMacro :: String -> String
+splitMacro macro | null absSplit = "(" ++ associateMacro macro ++ ")"
+                 | null expressions = "(" ++ take 7 abstraction ++ splitMacro (drop 7 abstraction) ++ ")"
+                 | otherwise = "(" ++ associateMacro expressions ++ ")" ++ "(" ++ take 7 abstraction ++ splitMacro (drop 7 abstraction) ++ ")"
+  where
+    absSplit = elemIndices '\\' macro
+    expressions = take (head absSplit) macro
+    abstraction = drop (head absSplit) macro
+
+-- Breaks up the function parts by left associativity.
+associateMacro :: [Char] -> [Char]
+associateMacro macro = leftBrackets ++ midBrackets
+  where
+    leftBrackets = intercalate "" [ "(" | a <- [2..(length $ words macro)]]
+    midBrackets = intercalate ")" (words macro)
 
 -- Challenge 5
 
@@ -409,12 +431,17 @@ cpsTransform :: LamMacroExpr -> LamMacroExpr
 cpsTransform _ = LamDef [] (LamVar 0)
 
 -- Examples in the instructions
+exId :: LamExpr
 exId =  (LamAbs 1 (LamVar 1))
 ex5'1 :: LamExpr
 ex5'1 = (LamApp (LamVar 1) (LamVar 2))
+ex5'2 :: LamMacroExpr
 ex5'2 = (LamDef [ ("F", exId) ] (LamVar 2) )
+ex5'3 :: LamMacroExpr
 ex5'3 = (LamDef [ ("F", exId) ] (LamMacro "F") )
+ex5'4 :: LamMacroExpr
 ex5'4 = (LamDef [ ("F", exId) ] (LamApp (LamMacro "F") (LamMacro "F")))
+
 
 
 -- Challenge 6
@@ -428,26 +455,36 @@ outerRedn1 _ = Nothing
 compareInnerOuter :: LamMacroExpr -> Int -> (Maybe Int,Maybe Int,Maybe Int,Maybe Int)
 compareInnerOuter _ _ = (Nothing,Nothing,Nothing,Nothing) 
 
+
+
 -- Examples in the instructions
 
 -- (\x1 -> x1 x2)
+ex6'1 :: LamMacroExpr
 ex6'1 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamVar 2)))
 
 --  def F = \x1 -> x1 in F  
+ex6'2 :: LamMacroExpr
 ex6'2 = LamDef [ ("F",exId) ] (LamMacro "F")
 
 --  (\x1 -> x1) (\x2 -> x2)   
+ex6'3 :: LamMacroExpr
 ex6'3 = LamDef [] ( LamApp exId (LamAbs 2 (LamVar 2)))
 
 --  (\x1 -> x1 x1)(\x1 -> x1 x1)  
+wExp :: LamExpr
 wExp = (LamAbs 1 (LamApp (LamVar 1) (LamVar 1)))
+ex6'4 :: LamMacroExpr
 ex6'4 = LamDef [] (LamApp wExp wExp)
 
 --  def ID = \x1 -> x1 in def FST = (\x1 -> λx2 -> x1) in FST x3 (ID x4) 
+ex6'5 :: LamMacroExpr
 ex6'5 = LamDef [ ("ID",exId) , ("FST",LamAbs 1 (LamAbs 2 (LamVar 1))) ] ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (LamMacro "ID") (LamVar 4)))
 
 --  def FST = (\x1 -> λx2 -> x1) in FST x3 ((\x1 ->x1) x4))   
+ex6'6 :: LamMacroExpr
 ex6'6 = LamDef [ ("FST", LamAbs 1 (LamAbs 2 (LamVar 1)) ) ]  ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (exId) (LamVar 4)))
 
 -- def ID = \x1 -> x1 in def SND = (\x1 -> λx2 -> x2) in SND ((\x1 -> x1 x1) (\x1 -> x1 x1)) ID
+ex6'7 :: LamMacroExpr
 ex6'7 = LamDef [ ("ID",exId) , ("SND",LamAbs 1 (LamAbs 2 (LamVar 2))) ]  (LamApp (LamApp (LamMacro "SND") (LamApp wExp wExp) ) (LamMacro "ID") ) 
