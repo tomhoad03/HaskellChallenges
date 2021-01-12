@@ -342,7 +342,7 @@ readExpr (LamApp lamExpr1 lamExpr2) lamDefs | checkDefs lamExpr1 lamDefs && chec
 readExpr (LamAbs lamNum lamExpr) [] = "\\x" ++ show lamNum ++ " -> " ++ readExpr lamExpr []
 readExpr (LamAbs lamNum lamExpr) lamDefs | checkDefs lamExpr lamDefs = "\\x" ++ show lamNum ++ " -> " ++ readExpr lamExpr lamDefs
                                          | checkDefs lamExpr lamDefs = "\\x" ++ show lamNum ++ " -> " ++ getValue lamExpr lamDefs
--- Currently printing double backslashes in abstraction expressions - read up on escaping this.
+-- Currently printing double backslashes in abstraction expressions - must read up on escaping this.
 
 
 
@@ -374,13 +374,17 @@ ex3'6 = LamDef [] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
 -- Produces a lamda macro expression for a valid macro.
 parseLamMacro :: String -> Maybe LamMacroExpr
-parseLamMacro macro | not (null macro) = Just (breakMacro macro)
-                    | otherwise = Nothing
+parseLamMacro macro | null macro = Nothing
+                    | length (elemIndices 'd' macro) > 1 = Nothing -- Repeated definitions
+                    | 'd' `elem` macro && length expr == 1 = Nothing -- Macro body not closed
+                    | otherwise = Just (breakMacro macro) -- Acceptable input
+  where
+    expr = drop (head (elemIndices 'i' macro) + 3) macro
 
 -- Breaks apart the macro into its definition and its expression.
 breakMacro :: String -> LamMacroExpr
-breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (convertExpr expr)
-                 | otherwise = LamDef [] (convertExpr macro)
+breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (convertExpr expr) -- With a definition
+                 | otherwise = LamDef [] (convertExpr macro) -- Without a definition
   where
     i = elemIndices 'i' macro
     x = head i - 1
@@ -390,7 +394,7 @@ breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (co
     defExpr = drop 8 def 
     expr = drop y macro
 
--- Determines what type of expression is given.
+-- Go between function that reads the explicit brackets before it converts.
 convertExpr :: String -> LamExpr
 convertExpr macro = uncurry findAbs macrodMacro
   where
@@ -398,23 +402,23 @@ convertExpr macro = uncurry findAbs macrodMacro
 
 -- Finds an abstraction in macro.
 findAbs :: String -> [(String, Char)] -> LamExpr
-findAbs macro macrodMacros | not (null absLoc) && head absLoc > 0 = LamApp (readMacro (take (head absLoc - 1) macro) macrodMacros) lamExpr
-                           | not (null absLoc) && head absLoc == 0 = lamExpr
-                           | otherwise = readMacro macro macrodMacros
+findAbs macro macrodMacros | not (null absLoc) && head absLoc > 0 = LamApp (readMacro (take (head absLoc - 1) macro) macrodMacros) lamExpr -- Application on an abstraction 
+                           | not (null absLoc) && head absLoc == 0 = lamExpr -- Just abstraction
+                           | otherwise = readMacro macro macrodMacros -- No abstraction
   where
     absLoc = elemIndices '\\' macro
     lamExpr = LamAbs (digitToInt (macro !! (head absLoc + 2))) (findAbs (drop (head absLoc + 7) macro) macrodMacros)
 
 -- Reads a macro and writes the equivilant lamda expression.
 readMacro :: String -> [(String, Char)] -> LamExpr
-readMacro macro macrodMacros | length macro > 2 = LamApp (readMacro (take space macro) macrodMacros) (readMacro (drop (space+1) macro) macrodMacros)
-                             | length macro == 2 = LamVar (digitToInt (last macro))
-                             | length macro == 1 = checkMacros macro macrodMacros
-                             | otherwise = LamVar 1
+readMacro macro macrodMacros | length macro > 2 = LamApp (readMacro (take space macro) macrodMacros) (readMacro (drop (space+1) macro) macrodMacros) -- Application
+                             | length macro == 2 = LamVar (digitToInt (last macro)) -- Lamda variable
+                             | length macro == 1 = checkMacros macro macrodMacros -- Lambda macro
+                             | otherwise = LamVar (-1) -- Fail state
   where
     space = last $ elemIndices ' ' macro
 
--- Check lamda macros if they are part of the definition.
+-- Check lamda macros if they are part of the definition, if not, they are converted back to their expressions.
 checkMacros :: [Char] -> [(String, Char)]-> LamExpr
 checkMacros macro macrodMacros | head macro `notElem` tempMacros = LamMacro macro
                                | otherwise = convertExpr tempMacro
@@ -422,7 +426,7 @@ checkMacros macro macrodMacros | head macro `notElem` tempMacros = LamMacro macr
     tempMacros = map snd macrodMacros
     tempMacro = fst $ head $ filter (\(x,y) -> y == head macro) macrodMacros
 
--- Replaces the explicit brackets with a macro.
+-- Replaces the explicit brackets with a temporary macro to not confuse the application rules.
 replaceBrackets :: String -> (String, [(String, Char)])
 replaceBrackets macro = go macro macrodBrackets
   where
@@ -439,19 +443,19 @@ replaceBrackets macro = go macro macrodBrackets
 macroBrackets :: String -> [(String, Char)]
 macroBrackets macro = macrodStrings
   where
-    macros = filter (`notElem` findMacros macro) ['A'..'Y']
+    macros = filter (`notElem` findMacros macro) ['A'..'Z']
     brackets = findBrackets macro
     bracketedStrings = [ a | (x, y) <- brackets, a <- [drop (x+1) (take y macro)] ]
     macrodStrings = zip bracketedStrings macros
 
--- Finds any macros in the macro string.
+-- Finds any macros in the macro string. Any temporary macros won't mix with ones given in the definition.
 findMacros :: String -> String
 findMacros macro = [ a | (a, b) <- filter (\(x,y) -> y `elem` indices) zippedIndices ]
   where
     indices = findIndices isUpper macro
     zippedIndices = zip macro [0..(length macro - 1)]
 
--- Finds brackets in the macro.
+-- Finds all the explicit brackets in the macro.
 findBrackets :: String -> [(Int, Int)]
 findBrackets macro | not (null brackets) = findOuterBrackets brackets
                    | otherwise = []
@@ -460,7 +464,7 @@ findBrackets macro | not (null brackets) = findOuterBrackets brackets
     sndBrackets = elemIndices ')' macro
     brackets = zip fstBrackets sndBrackets
 
--- Find the outer brackets of the macro.
+-- Find the outer brackets of the macro. ( _ ( _ )) -> ( ___ )
 findOuterBrackets :: Ord b => [(b, b)] -> [(b, b)]
 findOuterBrackets brackets | not (null outers) = (fst first, snd final) : findOuterBrackets outers
                            | otherwise = [(fst first, snd $ last brackets)]
@@ -469,7 +473,6 @@ findOuterBrackets brackets | not (null outers) = (fst first, snd final) : findOu
     limit = snd first
     outers = filter (\(x,y) -> x > limit) brackets
     final = brackets !! (head (elemIndices (head outers) brackets) - 1)
-
 
 
 
