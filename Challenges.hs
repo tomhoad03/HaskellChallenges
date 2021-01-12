@@ -22,6 +22,7 @@ import System.Random
 
 -- My import statements.
 import Data.Function ( on )
+import Data.Maybe
 
 instance NFData Orientation
 instance NFData LamMacroExpr
@@ -391,52 +392,85 @@ breakMacro macro | not (null i) = LamDef [([defMacro], convertExpr defExpr)] (co
 
 -- Determines what type of expression is given.
 convertExpr :: String -> LamExpr
-convertExpr macro = readMacro $ bracketMacro macro
-
--- Reads the string macro (now that it has been bracketed.)
-readMacro :: String -> LamExpr
-readMacro macro | head macro /= '(' && last macro /= ')' && length macro == 1 = LamMacro macro
-                | head macro /= '(' && last macro /= ')' = LamVar (digitToInt (last macro))
-                | head macro == '(' && last macro /= ')' = LamApp (readMacro $ removeBrackets $ init $ init macro) (LamVar (digitToInt (last macro)))
-                | head macro /= '(' && last macro == ')' = LamAbs (digitToInt (macro !! 2)) (readMacro $ removeBrackets $ drop 5 macro)
-                | head macro == '(' && last macro == ')' && length macro > mid = LamApp (readMacro (take mid macro)) (readMacro (drop mid macro))
-                | otherwise = readMacro $ removeBrackets macro
+convertExpr macro = uncurry findAbs macrodMacro
   where
-    mid = findMid macro
+    macrodMacro = replaceBrackets macro
 
--- Removes the brackets from an expression.
-removeBrackets :: [Char] -> [Char]
-removeBrackets macro | head macro == '(' && last macro == ')' = tail $ init macro
-                     | otherwise = macro
-
--- Splits up a macro into its function parts.
-bracketMacro :: String -> String
-bracketMacro macro | null absSplit = associateMacro macro
-                   | null exprs = abstrsSplit
-                   | otherwise = "(" ++ associateMacro exprs ++ ")" ++ abstrsSplit
+-- Finds an abstraction in macro.
+findAbs :: String -> [(String, Char)] -> LamExpr
+findAbs macro macrodMacros | not (null absLoc) && head absLoc > 0 = LamApp (readMacro (take (head absLoc - 1) macro) macrodMacros) lamExpr
+                           | not (null absLoc) && head absLoc == 0 = lamExpr
+                           | otherwise = readMacro macro macrodMacros
   where
-    absSplit = elemIndices '\\' macro
-    exprs = take (head absSplit) macro
-    abstrs = drop (head absSplit) macro
-    abstrsSplit = "(\\x" ++ [abstrs !! 2] ++ "->" ++ "(" ++ bracketMacro (drop 7 abstrs) ++ "))"
+    absLoc = elemIndices '\\' macro
+    lamExpr = LamAbs (digitToInt (macro !! (head absLoc + 2))) (findAbs (drop (head absLoc + 7) macro) macrodMacros)
 
--- Splits up the function parts by left associativity.
-associateMacro :: String -> String
-associateMacro macro = leftBrackets ++ midBrackets
+-- Reads a macro and writes the equivilant lamda expression.
+readMacro :: String -> [(String, Char)] -> LamExpr
+readMacro macro macrodMacros | length macro > 2 = LamApp (readMacro (take space macro) macrodMacros) (readMacro (drop (space+1) macro) macrodMacros)
+                             | length macro == 2 = LamVar (digitToInt (last macro))
+                             | length macro == 1 = checkMacros macro macrodMacros
+                             | otherwise = LamVar 1
   where
-    leftBrackets = intercalate "" [ "(" | a <- [2..(length $ words macro)]]
-    midBrackets = intercalate ")" (words macro)
+    space = last $ elemIndices ' ' macro
 
--- Finds the middle part of the macro.
-findMid :: Num a => String -> a
-findMid macro = go (tail macro) 1 0
+-- Check lamda macros if they are part of the definition.
+checkMacros :: [Char] -> [(String, Char)]-> LamExpr
+checkMacros macro macrodMacros | head macro `notElem` tempMacros = LamMacro macro
+                               | otherwise = convertExpr tempMacro
   where
-    go m n c
-      | n == 0 = c + 1
-      | head m == '(' = go (tail m) (n+1) (c+1)
-      | head m == ')' = go (tail m) (n-1) (c+1)
-      | otherwise = go (tail m) n (c+1)
-      
+    tempMacros = map snd macrodMacros
+    tempMacro = fst $ head $ filter (\(x,y) -> y == head macro) macrodMacros
+
+-- Replaces the explicit brackets with a macro.
+replaceBrackets :: String -> (String, [(String, Char)])
+replaceBrackets macro = go macro macrodBrackets
+  where
+    macrodBrackets = macroBrackets macro
+    go string macros | not (null macros) = go removedString (tail macros)
+                     | otherwise = (string, macrodBrackets)
+                       where
+                         toFind = fst $ head macros
+                         toReplace = snd $ head macros
+                         index = fromMaybe (-1) $ (toFind `isPrefixOf`) `findIndex` tails string
+                         removedString = take (index - 1) string ++ [toReplace] ++ drop (index + length toFind + 1) string
+
+-- Pairs up a temporary macro for each of the explicit brackets.
+macroBrackets :: String -> [(String, Char)]
+macroBrackets macro = macrodStrings
+  where
+    macros = filter (`notElem` findMacros macro) ['A'..'Y']
+    brackets = findBrackets macro
+    bracketedStrings = [ a | (x, y) <- brackets, a <- [drop (x+1) (take y macro)] ]
+    macrodStrings = zip bracketedStrings macros
+
+-- Finds any macros in the macro string.
+findMacros :: String -> String
+findMacros macro = [ a | (a, b) <- filter (\(x,y) -> y `elem` indices) zippedIndices ]
+  where
+    indices = findIndices isUpper macro
+    zippedIndices = zip macro [0..(length macro - 1)]
+
+-- Finds brackets in the macro.
+findBrackets :: String -> [(Int, Int)]
+findBrackets macro | not (null brackets) = findOuterBrackets brackets
+                   | otherwise = []
+  where
+    fstBrackets = elemIndices '(' macro
+    sndBrackets = elemIndices ')' macro
+    brackets = zip fstBrackets sndBrackets
+
+-- Find the outer brackets of the macro.
+findOuterBrackets :: Ord b => [(b, b)] -> [(b, b)]
+findOuterBrackets brackets | not (null outers) = (fst first, snd final) : findOuterBrackets outers
+                           | otherwise = [(fst first, snd $ last brackets)]
+  where
+    first = head brackets
+    limit = snd first
+    outers = filter (\(x,y) -> x > limit) brackets
+    final = brackets !! (head (elemIndices (head outers) brackets) - 1)
+
+
 
 
 -- Challenge 5
