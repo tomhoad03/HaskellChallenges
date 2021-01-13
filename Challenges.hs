@@ -11,18 +11,27 @@ module Challenges (WordSearchGrid,Placement,Posn,Orientation(..),solveWordSearch
 
 -- Import standard library and parsing definitions from Hutton 2016, Chapter 13
 -- We import System.Random - make sure that your installation has it installed - use stack ghci and stack ghc
-import Data.Char
-import Parsing
-import Control.Monad
+import Data.Char ( digitToInt, isUpper )
+import Parsing ()
+import Control.Monad ()
 import Data.List
+    ( elemIndices,
+      findIndex,
+      findIndices,
+      group,
+      groupBy,
+      isPrefixOf,
+      sort,
+      sortBy,
+      tails )
 import GHC.Generics (Generic,Generic1)
-import Control.DeepSeq
-import System.IO
-import System.Random
+import Control.DeepSeq ( NFData )
+import System.IO ()
+import System.Random ( getStdRandom, Random(randomR) )
 
 -- My import statements.
 import Data.Function ( on )
-import Data.Maybe
+import Data.Maybe ( fromMaybe, isJust, isNothing )
 
 instance NFData Orientation
 instance NFData LamMacroExpr
@@ -39,15 +48,10 @@ data LamMacroExpr = LamDef [ (String,LamExpr) ] LamExpr deriving (Eq,Show,Read,G
 data LamExpr = LamMacro String | LamApp LamExpr LamExpr  |
                LamAbs Int LamExpr  | LamVar Int deriving (Eq,Show,Read,Generic)
 
--- END OF CODE YOU MUST NOT MODIFY
-
--- ADD YOUR OWN CODE HERE
-
-
+-- END OF CODE YOU MUST NOT MODIFY; ADD YOUR OWN CODE HERE
 
 -- Challenge 1 --
-
--- Solves a given word search from a list of given words.
+-- Solves a given word search from a list of given words
 solveWordSearch :: [String] -> WordSearchGrid -> [(String, Maybe Placement)]
 solveWordSearch _ [] = error "No word search grid given."
 solveWordSearch [] _ = []
@@ -56,13 +60,13 @@ solveWordSearch words grid = filteredCheckedWords ++ missingWords
     -- Checks every word in every position.
     gridSize = length grid
     checkedWords = [findWords words grid (x, y) | y <- [0..gridSize - 1], x <- [0..gridSize - 1]]
-    filteredCheckedWords = filter (\x -> snd x /= Nothing) checkedWords
+    filteredCheckedWords = filter (isJust . snd) checkedWords
     missingWords = [(a, Nothing) | a <- filter (`notElem` map fst filteredCheckedWords) words]
 
 -- Checks every word at a given position.
 findWords :: [String] -> WordSearchGrid -> Posn -> (String, Maybe Placement)
 findWords words grid (x, y) | null words = ("", Nothing)
-                            | (snd foundWord) == Nothing = findWords (tail words) grid (x, y)
+                            | isNothing (snd foundWord) = findWords (tail words) grid (x, y)
                             | otherwise = foundWord
   where
     foundWord = findWord (head words) (x, y) grid
@@ -78,7 +82,7 @@ findWord word (x, y) grid | length matchedWords == 1 = (word, Just ((x, y), snd 
 
 -- Checks if the word matches all the words found from a given position.
 matchWords :: String -> [(String, Orientation)] -> [(String, Orientation)]
-matchWords word words = filter (\x -> fst x == word) words
+matchWords word = filter (\x -> fst x == word)
 
 -- Gets every word in every orientation from a positon with a given length.
 getWords :: Posn -> Int -> WordSearchGrid -> [String]
@@ -99,26 +103,10 @@ getLetter grid (x, y) | x > length grid - 1 || y > length grid - 1 = ' '
                       | x < 0 || y < 0 = ' '
                       | otherwise = (grid !! y) !! x
 
--- Challenge 1 and 2 testing grids and words.
-exGrid1'1 :: [[Char]]
-exGrid1'1 = ["HAGNIRTSH" , "SACAGETAK", "GCSTACKEL","MGHKMILKI","EKNLETGCN","TNIRTLETE","IRAAHCLSR","MAMROSAGD","GIZKDDNRG"]
-exWords1'1 :: [[Char]]
-exWords1'1 = ["HASKELL","STRING","STACK","MAIN","METHOD"]
-exGrid1'2 :: [[Char]]
-exGrid1'2 = ["ROBREUMBR","AURPEPSAN","UNLALMSEE","YGAUNPYYP","NLMNBGENA","NBLEALEOR","ALRYPBBLG","NREPBEBEP","YGAYAROMR"]
-exWords1'2 :: [[Char]]
-exWords1'2 = ["BANANA", "ORANGE", "MELON", "RASPBERRY","APPLE","PLUM","GRAPE"]
-
-exGrid1'3 :: [[Char]]
-exGrid1'3 = ["YBCCY", "YXCAZ", "ABZYX", "XZYBC", "XYCAB"]
-exWords1'3 :: [[Char]]
-exWords1'3 = ["ABC", "XYZ"]
-
 
 
 -- Challenge 2 --
-
--- Produces a solvable word search grid.
+-- Produces a solvable word search grid
 createWordSearch :: [ String ] -> Double -> IO WordSearchGrid
 createWordSearch [] _ = error "No words were given."
 createWordSearch words density = do let gridSize = findSize density words
@@ -145,7 +133,7 @@ splitGrid gridSize words = do grid <- mergeGrids gridSize words
 mergeGrids :: Int -> [String] -> IO [(Posn, Char)]
 mergeGrids gridSize words = do wordGrid <- positionWords gridSize words
                                randGrid <- randomGrid gridSize words gridSize
-                               return (map head (groupBy (\x y -> fst x == fst y) (sortBy (compare `on` snd) (wordGrid ++ concat randGrid))))
+                               return (map head (groupBy (\x y -> fst x == fst y) (sortBy (compare `on` fst) (wordGrid ++ concat randGrid))))
                                -- This part required me to import Data.Function which is part of the standard prelude.
 
 -- Generates a grid of positions and random letters.
@@ -234,12 +222,7 @@ randomOrientation :: IO Orientation
 randomOrientation = do a <- randomNumber 8
                        return ([Forward, Back, Up, Down, UpForward, UpBack, DownForward, DownBack] !! a)
 
-
-
---- My challenge 2 testing functions.
-testCreateWordSearch :: IO WordSearchGrid
-testCreateWordSearch = do createWordSearch ["ABC", "XYZ"] 0.5
-
+--- Challenge 1 and 2 development testing functions
 testSplitGrid :: IO [[Char]]
 testSplitGrid = do splitGrid 4 ["ABC", "XYZ"]
 
@@ -255,27 +238,10 @@ testPositionWord = do positionWord 5 "Hello"
 testFindPositions :: IO [(Int, Int)]
 testFindPositions = do findPositions 5
 
--- Given testing functions.
-createAndSolve :: [ String ] -> Double -> IO [ (String, Maybe Placement) ]
-createAndSolve words maxDensity =   do g <- createWordSearch words maxDensity
-                                       let soln = solveWordSearch words g
-                                       printGrid g
-                                       return soln
-
-printGrid :: WordSearchGrid -> IO ()
-printGrid [] = return ()
-printGrid (w:ws) = do putStrLn w
-                      printGrid ws
-
 
 
 -- Challenge 3 --
-
--- Reminder of the data types used in parts 2 and 3
--- data LamMacroExpr = LamDef [(String, LamExpr)] LamExpr deriving (Eq, Show, Read)
--- data LamExpr = LamMacro String | LamApp LamExpr LamExpr  |
---                LamAbs Int LamExpr  | LamVar Int deriving (Eq, Show, Read)
-
+-- Pretty prints a lamda macro expression
 prettyPrint :: LamMacroExpr -> String
 prettyPrint macroExpr | not (null lamDefs) = readDefExprs lamDefs ++ lamExpr
                       | otherwise = lamExpr
@@ -344,42 +310,24 @@ readExpr (LamAbs lamNum lamExpr) lamDefs | checkDefs lamExpr lamDefs = "\\x" ++ 
                                          | checkDefs lamExpr lamDefs = "\\x" ++ show lamNum ++ " -> " ++ getValue lamExpr lamDefs
 -- Currently printing double backslashes in abstraction expressions - must read up on escaping this.
 
-
-
--- Challenge 3 testing functions.
+-- Challenge 3 development testing functions.
 testGetValue :: String
 testGetValue = getValue (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
 
 testCheckDefs :: Bool
 testCheckDefs = checkDefs (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
 
--- Challenge 3 testing expressions.
-ex3'1 :: LamMacroExpr
-ex3'1 = LamDef [] (LamApp (LamAbs 1 (LamVar 1)) (LamAbs 1 (LamVar 1)))
-ex3'2 :: LamMacroExpr
-ex3'2 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamAbs 1 (LamVar 1))))
-ex3'3 :: LamMacroExpr
-ex3'3 = LamDef [ ("F", LamAbs 1 (LamVar 1) ) ] (LamAbs 2 (LamApp (LamVar 2) (LamMacro "F")))
-ex3'4 :: LamMacroExpr
-ex3'4 = LamDef [ ("F", LamAbs 1 (LamVar 1) ) ] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
-ex3'5 :: LamMacroExpr
-ex3'5 = LamDef [ ("A", LamAbs 1 (LamVar 1)), ("B", LamVar 2 ) ] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
-ex3'6 :: LamMacroExpr
-ex3'6 = LamDef [] (LamAbs 2 (LamApp (LamAbs 1 (LamVar 1)) (LamVar 2)))
 
 
 
 -- Challenge 4 --
-
--- Produces a lamda macro expression for a valid macro.
+-- Produces a lamda macro expression for a valid macro string
 parseLamMacro :: String -> Maybe LamMacroExpr
 parseLamMacro macro | null macro = Nothing
                     | length (elemIndices 'd' macro) > 1 = Nothing -- Repeated definitions
-                    | 'd' `elem` macro && length expr == 1 = Nothing -- Macro body not closed
+                    | length macro < 16 && 'd' `elem` macro = Nothing -- Macro body not closed
                     | otherwise = Just (breakMacro macro) -- Acceptable input
-  where
-    expr = drop (head (elemIndices 'i' macro) + 3) macro
 
 -- Breaks apart the macro into its definition and its expression.
 breakMacro :: String -> LamMacroExpr
@@ -477,26 +425,26 @@ findOuterBrackets brackets | not (null outers) = (fst first, snd final) : findOu
 
 
 -- Challenge 5
-
+-- Converts CPS lamda calclus to a standard lamda expressions
 cpsTransform :: LamMacroExpr -> LamMacroExpr
 cpsTransform _ = LamDef [] (LamVar 0)
 
--- Examples in the instructions
+-- Challenge 5 testing expressions
 exId :: LamExpr
-exId =  (LamAbs 1 (LamVar 1))
+exId =  LamAbs 1 (LamVar 1)
 ex5'1 :: LamExpr
-ex5'1 = (LamApp (LamVar 1) (LamVar 2))
+ex5'1 = LamApp (LamVar 1) (LamVar 2)
 ex5'2 :: LamMacroExpr
-ex5'2 = (LamDef [ ("F", exId) ] (LamVar 2) )
+ex5'2 = LamDef [ ("F", exId) ] (LamVar 2) 
 ex5'3 :: LamMacroExpr
-ex5'3 = (LamDef [ ("F", exId) ] (LamMacro "F") )
+ex5'3 = LamDef [ ("F", exId) ] (LamMacro "F")
 ex5'4 :: LamMacroExpr
-ex5'4 = (LamDef [ ("F", exId) ] (LamApp (LamMacro "F") (LamMacro "F")))
+ex5'4 = LamDef [ ("F", exId) ] (LamApp (LamMacro "F") (LamMacro "F"))
 
 
 
 -- Challenge 6
-
+-- Counting and comparing direct lamda calculus reductions and CPS
 innerRedn1 :: LamMacroExpr -> Maybe LamMacroExpr
 innerRedn1 _ = Nothing
 
@@ -506,36 +454,27 @@ outerRedn1 _ = Nothing
 compareInnerOuter :: LamMacroExpr -> Int -> (Maybe Int,Maybe Int,Maybe Int,Maybe Int)
 compareInnerOuter _ _ = (Nothing,Nothing,Nothing,Nothing) 
 
-
-
--- Examples in the instructions
-
+-- Challenge 6 testing expressions
 -- (\x1 -> x1 x2)
 ex6'1 :: LamMacroExpr
 ex6'1 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamVar 2)))
-
 --  def F = \x1 -> x1 in F  
 ex6'2 :: LamMacroExpr
 ex6'2 = LamDef [ ("F",exId) ] (LamMacro "F")
-
 --  (\x1 -> x1) (\x2 -> x2)   
 ex6'3 :: LamMacroExpr
 ex6'3 = LamDef [] ( LamApp exId (LamAbs 2 (LamVar 2)))
-
 --  (\x1 -> x1 x1)(\x1 -> x1 x1)  
 wExp :: LamExpr
-wExp = (LamAbs 1 (LamApp (LamVar 1) (LamVar 1)))
+wExp = LamAbs 1 (LamApp (LamVar 1) (LamVar 1))
 ex6'4 :: LamMacroExpr
 ex6'4 = LamDef [] (LamApp wExp wExp)
-
 --  def ID = \x1 -> x1 in def FST = (\x1 -> λx2 -> x1) in FST x3 (ID x4) 
 ex6'5 :: LamMacroExpr
 ex6'5 = LamDef [ ("ID",exId) , ("FST",LamAbs 1 (LamAbs 2 (LamVar 1))) ] ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (LamMacro "ID") (LamVar 4)))
-
 --  def FST = (\x1 -> λx2 -> x1) in FST x3 ((\x1 ->x1) x4))   
 ex6'6 :: LamMacroExpr
-ex6'6 = LamDef [ ("FST", LamAbs 1 (LamAbs 2 (LamVar 1)) ) ]  ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (exId) (LamVar 4)))
-
+ex6'6 = LamDef [ ("FST", LamAbs 1 (LamAbs 2 (LamVar 1)) ) ]  ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp exId (LamVar 4)))
 -- def ID = \x1 -> x1 in def SND = (\x1 -> λx2 -> x2) in SND ((\x1 -> x1 x1) (\x1 -> x1 x1)) ID
 ex6'7 :: LamMacroExpr
 ex6'7 = LamDef [ ("ID",exId) , ("SND",LamAbs 1 (LamAbs 2 (LamVar 2))) ]  (LamApp (LamApp (LamMacro "SND") (LamApp wExp wExp) ) (LamMacro "ID") ) 
