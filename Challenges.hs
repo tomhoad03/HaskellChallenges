@@ -5,9 +5,9 @@
 -- The dummy functions here simply return an arbitrary value that is usually wrong 
 
 -- DO NOT MODIFY THE FOLLOWING LINES OF CODE
-module Challenges (WordSearchGrid,Placement,Posn,Orientation(..),solveWordSearch, createWordSearch,
+module Challenges ( WordSearchGrid,Placement,Posn,Orientation(..),solveWordSearch, createWordSearch,
     LamMacroExpr(..),LamExpr(..),prettyPrint, parseLamMacro,
-    cpsTransform,innerRedn1,outerRedn1,compareInnerOuter) where
+    cpsTransform,innerRedn1,outerRedn1,compareInnerOuter ) where
 
 -- Import standard library and parsing definitions from Hutton 2016, Chapter 13
 -- We import System.Random - make sure that your installation has it installed - use stack ghci and stack ghc
@@ -280,10 +280,8 @@ readDefExprs (x:xs) | not (null xs) = exprString ++ " and " ++ readDefExprs xs
   where
     exprString = "def " ++ getDefValue x ++ " = " ++ readExpr (getDefExpr x) []
 
--- Prints a lambda expression.
-readExpr :: LamExpr -> [(String, LamExpr)] -> String
-
 -- Prints macro and variable expressions.
+readExpr :: LamExpr -> [(String, LamExpr)] -> String
 readExpr (LamMacro lamValue) _ = lamValue
 readExpr (LamVar lamNum) _ = "x" ++ show lamNum
 
@@ -316,8 +314,6 @@ testGetValue = getValue (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
 
 testCheckDefs :: Bool
 testCheckDefs = checkDefs (LamAbs 1 (LamVar 1)) [("F", LamAbs 1 (LamVar 1))]
-
-
 
 
 
@@ -427,19 +423,36 @@ findOuterBrackets brackets | not (null outers) = (fst first, snd final) : findOu
 -- Challenge 5
 -- Converts CPS lamda calclus to a standard lamda expressions
 cpsTransform :: LamMacroExpr -> LamMacroExpr
-cpsTransform _ = LamDef [] (LamVar 0)
+cpsTransform (LamDef [] expr) = LamDef [] (transformExpr 1 expr)
+cpsTransform (LamDef defs expr) = LamDef (zip (map fst defs) (map (transformExpr 1 . snd) defs)) (transformExpr 1 expr)
 
--- Challenge 5 testing expressions
-exId :: LamExpr
-exId =  LamAbs 1 (LamVar 1)
-ex5'1 :: LamExpr
-ex5'1 = LamApp (LamVar 1) (LamVar 2)
-ex5'2 :: LamMacroExpr
-ex5'2 = LamDef [ ("F", exId) ] (LamVar 2) 
-ex5'3 :: LamMacroExpr
-ex5'3 = LamDef [ ("F", exId) ] (LamMacro "F")
-ex5'4 :: LamMacroExpr
-ex5'4 = LamDef [ ("F", exId) ] (LamApp (LamMacro "F") (LamMacro "F"))
+-- Transforms a lamda expression based on what type of expression it is.
+transformExpr :: Int -> LamExpr -> LamExpr
+transformExpr count expr | findExpr expr == "app" = transformApp (count + 1) expr 
+                         | findExpr expr == "abs" = transformAbs count expr
+                         | findExpr expr == "var" = transformVar count expr
+                         | findExpr expr == "macro" = expr
+
+-- Determines what kind of lamda expression it is transforming.
+findExpr :: LamExpr -> String
+findExpr (LamApp _ _) = "app"
+findExpr (LamAbs _ _) = "abs"
+findExpr (LamVar _) = "var"
+findExpr (LamMacro _) = "macro"
+
+-- Transforms a lamda application.
+transformApp :: Int -> LamExpr -> LamExpr
+transformApp count (LamApp expr1 expr2) = LamAbs count (LamApp (transformExpr (count + 3) expr1) (LamAbs (count + 1)
+                                            (LamApp (transformExpr (count + 4) expr2) (LamAbs (count + 2)
+                                              (LamApp (LamApp (LamVar (count + 1)) (LamVar (count + 2))) (LamVar count))))))
+
+-- Transforms a lamda abstraction.
+transformAbs :: Int -> LamExpr -> LamExpr
+transformAbs count (LamAbs n expr) = LamAbs count (LamApp (LamVar count) (LamAbs n (transformExpr (count + 1) expr)))
+
+-- Transforms a lamda variable.
+transformVar :: Int -> LamExpr -> LamExpr
+transformVar count (LamVar n) = LamAbs count (LamApp (LamVar count) (LamVar n))
 
 
 
@@ -455,6 +468,8 @@ compareInnerOuter :: LamMacroExpr -> Int -> (Maybe Int,Maybe Int,Maybe Int,Maybe
 compareInnerOuter _ _ = (Nothing,Nothing,Nothing,Nothing) 
 
 -- Challenge 6 testing expressions
+exId :: LamExpr
+exId = LamAbs 1 (LamVar 1)
 -- (\x1 -> x1 x2)
 ex6'1 :: LamMacroExpr
 ex6'1 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamVar 2)))
