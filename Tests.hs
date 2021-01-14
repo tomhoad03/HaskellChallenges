@@ -4,11 +4,11 @@ import Challenges ( Placement, WordSearchGrid, LamExpr(LamApp, LamAbs, LamVar, L
                     createWordSearch, solveWordSearch, prettyPrint, parseLamMacro, cpsTransform, innerRedn1, outerRedn1, compareInnerOuter )
 
 main :: IO ()
-main = do putStrLn "\nChallenge 1 - Creating a word search:"
-          a <- testCreateWordSearch
-          printGrid a
-          putStrLn "\nChallenge 2 - Solving a word search:"
-          b <- testSolveWordSearch a
+main = do putStrLn "\nChallenge 1 - Solving a word search:"
+          a <- testSolveWordSearch
+          print a
+          putStrLn "\nChallenge 2 - Creating a word search:"
+          b <- createAndSolve
           print b
           putStrLn "\nChallenge 3 - pretty printing a lamda expression:"
           c <- testPrettyPrint ex3'1 -- (\\x1 -> x1) \\x1 -> x1
@@ -40,13 +40,9 @@ main = do putStrLn "\nChallenge 1 - Creating a word search:"
           putStrLn "\nChallenge 6 - counting and comparing reductions to CPS:\n"
 
 -- Challenge 1 and 2:
--- Test creating a word search
-testCreateWordSearch :: IO WordSearchGrid
-testCreateWordSearch = do createWordSearch exWords1 0.5
-
 -- Test solving a word search
-testSolveWordSearch :: WordSearchGrid -> IO [([Char], Maybe Placement)]
-testSolveWordSearch grid = do return (solveWordSearch exWords1 grid)
+testSolveWordSearch :: IO [([Char], Maybe Placement)]
+testSolveWordSearch = do return (solveWordSearch exWords exGrid)
 
 -- Print the grid (given)
 printGrid :: WordSearchGrid -> IO ()
@@ -54,12 +50,12 @@ printGrid [] = return ()
 printGrid (w:ws) = do putStrLn w
                       printGrid ws
 
--- Create and solve a word search (given)
-createAndSolve :: [ [Char] ] -> Double -> IO [ ([Char], Maybe Placement) ]
-createAndSolve words maxDensity =   do g <- createWordSearch words maxDensity
-                                       let soln = solveWordSearch words g
-                                       printGrid g
-                                       return soln
+-- Create and solve a word search (given + adapted)
+createAndSolve :: IO [([Char], Maybe Placement) ]
+createAndSolve = do a <- createWordSearch exWords 0.5
+                    let soln = solveWordSearch exWords a
+                    printGrid a
+                    return soln
 
 -- Challenge 3 and 4:
 -- Test pretty printing a lamda expression
@@ -77,10 +73,10 @@ testCPSTransform expr = do return (cpsTransform expr)
 
 -- Testing examples
 -- Challenge 1 and 2 testing grid and word
-exGrid1 :: [[Char]]
-exGrid1 = ["HAGNIRTSH" , "SACAGETAK", "GCSTACKEL","MGHKMILKI","EKNLETGCN","TNIRTLETE","IRAAHCLSR","MAMROSAGD","GIZKDDNRG"]
-exWords1 :: [[Char]]
-exWords1 = ["HASKELL","STRING","STACK","MAIN","METHOD"]
+exGrid :: [[Char]]
+exGrid = ["HAGNIRTSH" , "SACAGETAK", "GCSTACKEL","MGHKMILKI","EKNLETGCN","TNIRTLETE","IRAAHCLSR","MAMROSAGD","GIZKDDNRG"]
+exWords :: [[Char]]
+exWords = ["HASKELL","STRING","STACK","MAIN","METHOD"]
 
 -- Challenge 3 testing expressions
 ex3'1 :: LamMacroExpr
