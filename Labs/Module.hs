@@ -1,6 +1,8 @@
 module Module where
 
-import Data.Maybe ()
+import Data.List
+import Data.Maybe
+import System.IO
 
 -- Main function
 main :: IO ()
@@ -185,3 +187,21 @@ dayString day = "The day is: " ++ show day
   :t operator will show the classes it works on
   try :t (+), :t (++) and :t (^)
 -}
+
+-- IO
+sayHello = do putStrLn "Whats your name?"
+              name <- getLine
+              putStrLn $ "Hello " ++ name
+
+-- Files
+writeToFile = do theFile <- openFile "Test.txt" WriteMode
+                 hPutStrLn theFile ("Hello World!")
+                 hClose theFile
+
+readFromFile = do theFile <- openFile "Test.txt" ReadMode
+                  contents <- hGetContents theFile
+                  putStr contents
+                  hClose theFile
+
+-- Fibonacci
+fib = 1 : 1 : [a + b | (a, b) <- zip fib (tail fib)] -- Warning, this will go forever...
