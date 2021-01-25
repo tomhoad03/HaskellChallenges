@@ -195,7 +195,7 @@ sayHello = do putStrLn "Whats your name?"
 
 -- Files
 writeToFile = do theFile <- openFile "Test.txt" WriteMode
-                 hPutStrLn theFile ("Hello World!")
+                 hPutStrLn theFile "Hello World!"
                  hClose theFile
 
 readFromFile = do theFile <- openFile "Test.txt" ReadMode
@@ -204,4 +204,29 @@ readFromFile = do theFile <- openFile "Test.txt" ReadMode
                   hClose theFile
 
 -- Fibonacci
-fib = 1 : 1 : [a + b | (a, b) <- zip fib (tail fib)] -- Warning, this will go forever...
+fib :: [Int]
+fib = take 100 (1 : 1 : [a + b | (a, b) <- zip fib (tail fib)])
+
+-- Exam practice
+or' :: [Bool] -> Bool
+or' (x:xs) | x == True = True
+          | length xs == 0 = False
+          | otherwise = or' xs
+
+expMap :: (a -> a) -> [a] -> [a]
+expMap f [] = []
+expMap f (x:xs) = f x : expMap (f.f) xs
+
+shorter :: [a1] -> [a2] -> Bool
+shorter [] [] = False
+shorter xs [] = False
+shorter [] ys = True
+shorter (x:xs) (y:ys) = shorter xs ys
+
+riffle :: [a] -> [a] -> [a]
+riffle xs [] = xs
+riffle [] ys = ys
+riffle (x:xs) (y:ys) = [x] ++ [y] ++ riffle xs ys
+
+halve :: Fractional a => a -> a
+halve x = x / 2
