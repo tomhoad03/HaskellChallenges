@@ -1,8 +1,14 @@
 module Module where
 
-import Data.List
-import Data.Maybe
+import Data.List ( maximumBy )
+import Data.Maybe ()
 import System.IO
+    ( hClose,
+      openFile,
+      hGetContents,
+      hPutStrLn,
+      IOMode(ReadMode, WriteMode) )
+import Data.Function (on)
 
 -- Main function
 main :: IO ()
@@ -210,8 +216,8 @@ fib = take 100 (1 : 1 : [a + b | (a, b) <- zip fib (tail fib)])
 -- Exam practice
 or' :: [Bool] -> Bool
 or' (x:xs) | x == True = True
-          | length xs == 0 = False
-          | otherwise = or' xs
+           | length xs == 0 = False
+           | otherwise = or' xs
 
 expMap :: (a -> a) -> [a] -> [a]
 expMap f [] = []
@@ -230,3 +236,32 @@ riffle (x:xs) (y:ys) = [x] ++ [y] ++ riffle xs ys
 
 halve :: Fractional a => a -> a
 halve x = x / 2
+
+-- Exercise sheet 1
+-- Zip two equal length lists into list pairs
+zipL :: [a] -> [a] -> [[a]]
+zipL (x:xs) (y:ys) | length xs /= length ys = error "The lists are not of equal lengths!"
+                   | null xs = [[x, y]]
+                   | otherwise = [x, y] : zipL xs ys
+
+-- Unzip a list of list pairs
+unzipL :: [[a]] -> ([a], [a])
+unzipL list = (map (!! 0) list, map (!! 1) list)
+
+-- Unzip two lists (of any length) into list pairs
+zipL' :: [a] -> [a] -> [[a]]
+zipL' (x:xs) (y:ys) | null xs && null ys = [[x, y]]
+                   | null xs && not (null ys) = [x, y] : [ [a] | a <- ys]
+                   | not (null xs) && null ys = [x, y] : [ [a] | a <- xs]
+                   | otherwise = [x, y] : zipL xs ys
+-- It is not possible to create the inverse function (we don't know which list the single values belong too)
+
+-- Zip any number of lists (of any length)
+multiZipL :: [[a]] -> [[a]]
+multiZipL [] = []
+multiZipL lists | maxListLength lists > 1 = map (!! 0) lists : multiZipL (filter (not . null) (map tail lists))
+                | otherwise = [map (!! 0) lists]
+
+-- Returns the length of the longest list in a list of lists.
+maxListLength :: [[a]] -> Int
+maxListLength lists = length $ maximumBy (compare `on` length) lists
